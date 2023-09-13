@@ -1,7 +1,8 @@
 # ACC-Data-Analysis-with-R
 - Created for my Data Science class(DSE1001)
+- Data analysis for an Indian stock ACC
   
-## Goas
+## Goals
 - Analyze ACC(stock) to find insights
 - Create Graphics to help non-technical people understand insights
 - Practice R coding for Data Analysis 
