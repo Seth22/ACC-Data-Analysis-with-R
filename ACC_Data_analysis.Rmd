@@ -1,0 +1,205 @@
+---
+title: "Data Science project"
+author: "Seth Holtzman"
+date: "2023-02-17"
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readr) #loads functions to read CSV file 
+library(dplyr) #loads data wrangling functions 
+library(lubridate) #loads library for date functions 
+library(ggplot2) #loads library for creating graphs
+```
+
+```{r}
+dataset <- read_csv("ACC_with_indicators_.csv") #creates a new dataset from a CSV file
+glimpse(dataset) # give basic information about the dataset 
+head(dataset) #displays first few rows of the dataset
+```
+```{r}
+dataset2 <- dataset %>% 
+  dplyr::select(date,open,high,low,close,volume,sma5,sma10,sma20,ema5,ema10,ema20,MOM10,MOM15,MOM20,ROC5,ROC10,ROC20,BETA) #keeps only certain columns from the datast and stores them in a new dataset
+glimpse(dataset2) #gives basic infomrmation about the new dataset
+head(dataset2,10) #displays first 10 rows 
+
+```
+Question #1 How does volume affect the difference between the open and closing price? 
+
+First we will do a little bit of changing to the dataset to get the things we need such as a percent change between the open and close price to find the differnce between them. 
+```{r}
+#manipulations of dataset needed later for desired graphs 
+#goal is to get first price of a day and last price of a day and add percent change column of price
+openClose <- dataset2 %>% 
+  filter((hour(date) == 9 & minute(date) == 55) | (hour(date) == 3 & minute(date) == 45) | (wday(date) == 1)) %>% #keeps only the first and last row for each day of the market
+  dplyr::select(date,open,close,volume) %>%  #keeps only the columns we will use
+  mutate(type = if_else(hour(date) == 9,"Open","Close"), # adds column to say whether it is open or close time
+         percent_change = (((open-close)/open))*100, #adds columns of percent change between open and close
+         percent_change_type = #adds column for percent change type(positive or negative)
+           if_else(percent_change>0,"Positive","Negative"), 
+         ABS_percent_change = abs(percent_change)) # adds column for the absolute value of percent change
+openClose$percent_change_type <- factor(openClose$percent_change_type,levels = c("Positive","Negative"))
+
+openClose$type <- factor(openClose$type, levels = c("Open","Close"))
+head(openClose,10) #displays first ten rows
+summary(openClose$percent_change) #gives 6 number summary of percent change column (to help bound data later)
+summary(openClose$volume) #gives 6 number summary of volume column 
+```
+Next we graph our data in a way to hopefully show some correlations 
+```{r}
+VolumeVOpenCloseFacet <- ggplot(data = openClose, aes(x = volume, y = percent_change)) + geom_point(alpha = 0.25) + geom_smooth(method = "lm") + facet_grid(type~percent_change_type) +theme_linedraw() #plots volume on the x axis and percent change on the way axis, makes points darker/lighter based on density, in a scatter plot with a trendline, adds a facet grid for type and percent_change_type columns adds linedraw theme 
+
+VolumeVOpenCloseFacet #displays graph
+
+VolumeVOpenClose <- ggplot(data = openClose, aes(x = volume, y = percent_change)) + geom_point(alpha = 0.25,aes(color = percent_change_type)) + geom_smooth(method = "lm")+theme_linedraw() #plots volume on the x axis and percent change on the y axis in a scatter plot with a trendline, makes points darker/lighter based on density and color based on if percent change is positive or negative adds linedraw theme 
+VolumeVOpenClose #displays the graph 
+```
+This data is a bit zoomed out so next we try using a logarthmic scale for volume
+```{r}
+graph1log <- ggplot(data = openClose, aes(x = log(volume), y = percent_change)) + geom_point(alpha = 0.25) + geom_smooth(method = "lm") + facet_grid(type~percent_change_type) +theme_linedraw() 
+
+#plots the log of volume on the x axis and the percent change on the y axis, creates a scatter plot of the data adds a trend line, makes points darker/lighter based on density and facets based on the type and percent_change_type columns adds linedraw theme
+graph1log 
+
+```
+Next we split apart the faceted graph from above to make it larger 
+scale_fill_manual(values = c("#1d3557","#e63946"))
+```{r}
+question1.1 <- ggplot(data = openClose, aes(x = volume, y = percent_change)) + geom_point(alpha = 0.25,aes(color = percent_change_type)) + geom_smooth(se = FALSE)+theme_linedraw() + labs(title = "Percent Change Versus Volume", subtitle = "Alpha determined by density", x = "Volume(amount of stock traded)" ,y = "Percent Change",color = "Percent Change Type") + scale_color_manual(values = c("#219ebc","#e63946"))#plots the log of volume on the x axis and the percent change on the y axis, creates a scatter plot of the data adds a trend line and makes points darker/lighter based on density and adds linedraw
+
+question1.2 <- ggplot(data = openClose, aes(x = volume, y = percent_change)) + geom_point(alpha = 0.25,aes(color = percent_change_type)) + geom_smooth(se = FALSE)+theme_linedraw() + facet_wrap(~type) + labs(title = "Percent Change Versus Volume at Open and Close", subtitle = "Alpha determined by density", x = "Volume(amount of stock traded)" ,y = "Percent Change", color = "Percent Change Type") + scale_color_manual(values = c("#219ebc","#e63946"))#plots the log of volume on the x axis and the percent change on the y axis, creates a scatter plot of the data adds a trend line and makes points darker/lighter based on density and adds linedraw
+
+
+openClosePositive <- openClose %>% 
+  filter(percent_change_type == "Positive") #takes only the positive percent change types 
+
+question1.2Positive <- ggplot(data = openClosePositive, aes(x = volume, y = percent_change)) +geom_point(alpha = 0.25, color = "#219ebc") +geom_smooth(se = FALSE, color = "red") + theme_linedraw() + labs(title = "Positive") +facet_wrap(~type) + labs(title = "Positive Percent Change Versus Volume at Open and Close", subtitle = "Alpha determined by density", x = "Volume(amount of stock traded)" ,y = "Percent Change")
+
+#plots the log of volume on the x axis and the percent change on the y axis, creates a scatter plot of the data adds a trend line, makes points darker/lighter based on density and facets based on the type column adds linedraw theme
+
+
+
+openCloseNegative <- openClose %>% 
+  filter(percent_change_type == "Negative") #takes only the negative percent change values 
+
+question1.2Negative <- ggplot(data = openCloseNegative, aes(x = volume, y = percent_change)) +geom_point(alpha = 0.25,color = "#e63946") +geom_smooth(se = FALSE)+theme_linedraw() + labs(title = "Negative") + facet_wrap(~type) + labs(title = "Negative Percent Change Versus Volume at Open and Close", subtitle = "Alpha determined by density", x = "Volume(amount of stock traded)" ,y = "Percent Change")
+#plots the log of volume on the x axis and the percent change on the y axis, creates a scatter plot of the data adds a trend line, makes points darker/lighter based on density and facets based on the type column adds linedraw theme
+
+#displays the graphs created above 
+question1.1 
+question1.2
+question1.2Positive
+question1.2Negative
+```
+While these graphs show some promise they are a little bit zoomed out still so to improve them I will try removing some outliers. Another issue with the using a logarthmic scale and removing outliers is adding the proper labels to make it more clear what the graph actually represents. I also plan to clean up these graphs a bit and add some nice formatting. The outliers add a lot of noise but are also extremely important in the anylsis of stock price(after all they are the biggest movers) so finding a balance is key here. 
+```{r}
+quantile(openClose$volume) #gives the 1st, 2nd, 3rd and 4th quantile of the dataset 
+```
+
+```{r}
+openClose2 <- openClose %>% 
+  filter(volume >= 6413 & volume <= 20332) #keeps only the middle fifty percent of the dataset
+
+question2.1 <- ggplot(data = openClose2, aes(x = volume, y = percent_change)) +geom_point(alpha = 0.15, aes(color = percent_change_type)) +geom_smooth(se = FALSE)+theme_linedraw() + labs(title = "Percent Change Versus Volume", subtitle = "Middle Fifty Percent of the Data,Alpha determined by density", x = "Volume(amount of stock traded)" ,y = "Percent Change",color = "Percent Change Type") + scale_color_manual(values = c("#219ebc","#e63946"))
+
+question2.2 <- ggplot(data = openClose2, aes(x = volume, y = percent_change)) + geom_point(alpha = 0.25,aes(color = percent_change_type)) + geom_smooth(se = FALSE)+theme_linedraw() + facet_wrap(~type) + labs(title = "Percent Change Versus Volume at open and close", subtitle = "Middle Fifty Percent of the Data,Alpha determined by density", x = "Volume(amount of stock traded)" ,y = "Percent Change", color = "Percent Change Type") + scale_color_manual(values = c("#219ebc","#e63946")) #plots volume on the x axis and percent change on the y axis in a scatter plot with a trendline, makes points darker/lighter based on density and color based on if percent change is positive or negative adds linedraw theme 
+
+openClosePositive2 <- openClose2 %>% 
+  filter(percent_change_type == "Positive") #takes only the positive percent change types 
+
+openClosePositiveScatterPlot2 <- ggplot(data = openClosePositive2, aes(x = volume, y = percent_change)) +geom_point(alpha = 0.25, color = "#219ebc") +geom_smooth(se = FALSE,color = "red") + theme_linedraw() + labs(title = "Positive") +facet_wrap(~type) + labs(title = "Positive Percent Change Versus Volume at open and close", subtitle = "Middle Fifty Percent of the Data, Alpha determined by density", x = "Volume(amount of stock traded)" ,y = "Percent Change")
+
+#plots the log of volume on the x axis and the percent change on the y axis, creates a scatter plot of the data adds a trend line, makes points darker/lighter based on density and facets based on the type column adds linedraw theme
+
+openClosePositiveScatterPlot2 #displays our graph 
+
+
+openCloseNegative2 <- openClose2 %>% 
+  filter(percent_change_type == "Negative") #takes only the negative percent change values 
+
+openCloseNegativeScatterPlot2 <- ggplot(data = openCloseNegative2, aes(x = volume, y = percent_change)) +geom_point(alpha = 0.25,color = "#e63946") +geom_smooth(se = FALSE)+theme_linedraw() + labs(title = "Negative") + facet_wrap(~type) + labs(title = "Negative Percent Change Versus Volume at open and close", subtitle = "Middle Fifty Percent of the Data, Alpha determined by density", x = "Volume(amount of stock traded)" ,y = "Percent Change")
+#plots the log of volume on the x axis and the percent change on the y axis, creates a scatter plot of the data adds a trend line, makes points darker/lighter based on density and facets based on the type column adds linedraw theme
+
+openCloseNegativeScatterPlot2 #displays the graph
+
+question2.1
+question2.2
+
+```
+```{r}
+openCloseOpen <- openClose %>% 
+  filter(type == "open")
+quantile(openCloseOpen$percent_change, probs = seq(0,1,0.10))
+openCloseClose <- openClose %>% 
+  filter(type == "close")
+quantile(openCloseClose$percent_change, probs = seq(0,1,0.10))
+  
+ggplot(data = openClose, aes(x = type, y = percent_change)) +geom_boxplot()
+```
+
+
+
+
+----------------------------------------------------------------------------------------------
+
+Question 2 Which seasons(Fall,winter,Spring, Summer) have the greatest change in stock price and what direction does it trend? 
+
+First we will start with some dataset manipulation in order to add the proper season to the dataset and remove outliers from percent change to make the graph more "zoomed in" 
+
+```{r}
+dataset4 <- openClose %>% 
+  mutate(day = wday(date, label = TRUE, abbr = FALSE), #creates new column based on day of week
+         season = #creates new column based on season
+if_else(month(date)>=4 & month(date)<=6,"Spring", # if month is 3-5 labels it spring
+  if_else(month(date)>=7 & month(date)<=9,"Summer", # if month is 6-8 labels it summer
+    if_else(month(date)>=10 & month(date)<=12,"Fall","Winter")))) %>%   # if month is between 9-11 labels it fall
+  mutate(Moonsoon_Season = if_else(season == "Spring" | season == "Summer","Yes","No")) #adds column for if a month is during Moonsoon season
+dataset4$Moonsoon_Season <- factor(dataset4$Moonsoon_Season, levels = c("Yes","No")) #changes order of moonsoon season column
+dataset4$season <- factor(dataset4$season, levels = c("Spring","Summer","Fall","Winter")) #changes ordering of months
+
+
+quantile(dataset4$percent_change) #shows the quartiles for dataset4 
+
+dataset3 <- dataset4 %>% #creates new dataset from dataset4
+  filter(percent_change>-0.2 & percent_change<0.2) #keeps only the middle fifty percent of the data 
+```
+
+```{r}
+#c("darkblue","darkblue","lightblue","lightblue")
+SeasonPercentChangeBoxPlot2 <- ggplot(data = dataset4, aes(x = season, y = percent_change, fill = Moonsoon_Season)) + geom_boxplot(color = "black") + theme_linedraw() + labs(title = "Percent Change vs Season", subtitle = "Entire dataset", x = "Season", y = "Percent Change", fill = "Monsoon Season") + scale_fill_manual(values = c("#89b4ff","#a6a8db")) #plots the season on the x axis and percent change on the Y axis then creates a boxplot with theme linedraw 
+SeasonPercentChangeBoxPlot2 #displays graph 
+
+SeasonPercentChangeBoxPlot <- ggplot(data = dataset3, aes(x = season, y = percent_change, fill = Moonsoon_Season)) + geom_boxplot(color = "black") + theme_linedraw() + labs(title = "Percent Change vs Season", subtitle = "Middle Fifty Percent of Data ", x = "Season", y = "Percent Change",fill = "Monsoon Season") + scale_fill_manual(values = c("#89b4ff","#a6a8db")) #plots the season on the x axis and percent change on the Y axis then creates a boxplot with theme linedraw 
+SeasonPercentChangeBoxPlot #displays graph 
+
+```
+This graph can be improved visually to be more appealing. We also removed percent change less than -0.2 and greater than 0.2 While this does create a nicer looking graph these outliers are important to represent. The higher/lower the percent change the more the stock moves so these outliers are very important and cannot be ignored. I think dealing with the outliers in a more elegant way will be the best way to improve these results. 
+
+
+#IGNORE BELOW------------>
+#from another one of my questions I do no think I will persue but I decided to keep the code because I already wrote it and maybe I will need it in the future 
+```{r}
+graph3 <- ggplot(data = dataset3, aes(x = day,y = percent_change)) + geom_boxplot(color = "darkred", fill = "darkgrey") + theme_linedraw()
+graph3
+graph3.2 <- graph3 +coord_flip()
+graph3.2
+
+graph3testData <- dataset2 %>% 
+  mutate(percent_change = (((open-close)/open))*100,percent_change_type = if_else(percent_change>0,"Positive","Negative"), ABS_percent_change = abs(percent_change))
+
+```
+
+
+
+```{r}
+git clone https://github.com/Seth22/NFL-Arrests.git
+```
+
